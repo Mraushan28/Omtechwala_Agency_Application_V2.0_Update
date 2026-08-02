@@ -1,0 +1,1 @@
+/Users/rahulraushan/Documents/OmTechwalaV2 Application/node_modules/@embedded-postgres/darwin-arm64/native/bin/postgres "-D" "/Users/rahulraushan/Documents/OmTechwalaV2 Application/.pgdata" "-p" "5432"

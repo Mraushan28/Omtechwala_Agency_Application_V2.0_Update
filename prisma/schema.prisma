@@ -1,0 +1,201 @@
+// Om Techwala — Prisma Schema (MongoDB)
+// B2B Tech Talent Network & IT Outsourcing Platform
+// Roles: ADMIN, CLIENT, CONTRACTOR
+//
+// MongoDB connector notes:
+// - Enums are NOT supported -> string fields with documented allowed values.
+// - Decimal is NOT supported -> Float.
+// - @unique / @@unique are NOT supported -> uniqueness enforced in app code.
+// - $transaction and createMany are NOT supported -> sequential writes / loops.
+// - Referential actions (onDelete/onUpdate) are NOT supported -> omitted.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// User & role (role: ADMIN | CLIENT | CONTRACTOR)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          String   @default("CONTRACTOR")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clientProfiles     ClientProfile[]
+  contractorProfiles ContractorProfile[]
+  postedProjects     Project[]      @relation("ProjectClient")
+  assignedProjects   Project[]      @relation("ProjectContractor")
+  applications       Application[]  @relation("ApplicationContractor")
+  milestones         Milestone[]    @relation("MilestoneContractor")
+
+  @@index([email])
+  @@index([role])
+}
+
+// ---------------------------------------------------------------------------
+// Client Profile (enterprise companies)
+// ---------------------------------------------------------------------------
+// Note: MongoDB does not support @unique or one-to-one relations. The
+// User -> ClientProfile side is one-to-many; app code uses findFirst({ userId }).
+
+model ClientProfile {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  companyName    String
+  companyWebsite String?
+  companySize    String?
+  industry       String?
+  country        String?
+  billingEmail   String?
+  taxId          String?
+  ndaStatus      String   @default("NOT_SIGNED") // NOT_SIGNED | PENDING | SIGNED
+  ndaSignedAt    DateTime?
+  isVerified     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Contractor Profile (vetted talent)
+// ---------------------------------------------------------------------------
+
+model ContractorProfile {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @db.ObjectId
+  headline           String?
+  bio                String?
+  skills             String[] @default([])
+  experienceYears    Int      @default(0)
+  hourlyRate         Float?
+  currency           String   @default("USD")
+  availability       String   @default("FULL_TIME") // FULL_TIME | PART_TIME | HOURLY | NOT_AVAILABLE
+  portfolioLinks     String[] @default([])
+  githubUrl          String?
+  linkedinUrl        String?
+  resumeUrl          String?
+  languages          String[] @default([])
+  verificationStatus String   @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED | REJECTED
+  verificationNotes  String?
+  totalEarnings      Float    @default(0)
+  completedProjects  Int      @default(0)
+  rating             Float?
+  isTopRated         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([verificationStatus])
+}
+
+// ---------------------------------------------------------------------------
+// Project / Contract
+// category: WEB_DEVELOPMENT | AI_ML | AI_TRAINING | UI_UX_DESIGN | GRAPHIC_DESIGN
+// status: DRAFT | BIDDING | IN_PROGRESS | COMPLETED | CANCELLED
+// ---------------------------------------------------------------------------
+
+model Project {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  clientId       String   @db.ObjectId
+  contractorId   String?  @db.ObjectId
+  title          String
+  description    String
+  scope          String
+  category       String
+  budget         Float
+  budgetMin      Float?
+  budgetMax      Float?
+  techStack      String[] @default([])
+  deliverables   String[] @default([])
+  timelineWeeks  Int?
+  commissionRate Float    @default(0.12)
+  clientRate     Float?
+  contractorRate Float?
+  currency       String   @default("USD")
+  status         String   @default("DRAFT")
+  startDate      DateTime?
+  deadline       DateTime?
+  isUrgent       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client       User          @relation("ProjectClient", fields: [clientId], references: [id])
+  contractor   User?         @relation("ProjectContractor", fields: [contractorId], references: [id])
+  applications Application[]
+  milestones   Milestone[]
+
+  @@index([clientId])
+  @@index([category])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Application (contractor applies to a project)
+// status: PENDING | SHORTLISTED | ACCEPTED | REJECTED | WITHDRAWN
+// ---------------------------------------------------------------------------
+
+model Application {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId        String   @db.ObjectId
+  contractorId     String   @db.ObjectId
+  coverLetter      String?
+  proposedRate     Float?
+  proposedTimeline Int?
+  status           String   @default("PENDING")
+  submittedAt      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id])
+  contractor User    @relation("ApplicationContractor", fields: [contractorId], references: [id])
+
+  @@index([projectId])
+  @@index([contractorId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Milestone & Escrow (payout with commission)
+// status: PENDING | IN_REVIEW | APPROVED | PAID | DISPUTED | RELEASED
+// ---------------------------------------------------------------------------
+
+model Milestone {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId        String   @db.ObjectId
+  contractorId     String?  @db.ObjectId
+  title            String
+  description      String?
+  amount           Float
+  commissionRate   Float    @default(0.12)
+  contractorPayout Float?
+  status           String   @default("PENDING")
+  dueDate          DateTime?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  escrowReference  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id])
+  contractor User?   @relation("MilestoneContractor", fields: [contractorId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+}
+
