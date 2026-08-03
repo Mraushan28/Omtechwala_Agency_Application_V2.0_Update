@@ -58,6 +58,13 @@
 - [x] 16.4 `npx tsc --noEmit` — typecheck clean (exit 0)
 - [x] 16.5 `npm run build` — production build succeeds; Edge Middleware bundle = 85.3 kB (no Prisma WASM import)
 
+## Prisma Library Engine Fix (Step 17) — Force `engineType = "library"`
+
+- [x] 17.1 `prisma/schema.prisma` — generator `client` now sets `engineType = "library"` (MongoDB datasource kept)
+- [x] 17.2 `lib/prisma.ts` — clean `PrismaClient` singleton (global) with no WASM/edge imports
+- [x] 17.3 `npx prisma generate` — regenerated client, `engineType: "library"` confirmed in generated client
+- [x] 17.4 `npm run build` — production build succeeds with no `query_engine` module resolution errors
+
 ## Verification Status
 
 - [x] `npx prisma validate` — schema valid (MongoDB)
