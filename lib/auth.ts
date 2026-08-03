@@ -9,6 +9,8 @@ import { z } from "zod";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+import { authConfig } from "./auth.config";
+
 const credentialsSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
@@ -85,12 +87,17 @@ async function resolveUserForJwt(ctx: ResolveCtx): Promise<{ id: string; role: s
     return { id: created.id, role: validRole };
 }
 
+/**
+ * Full, Node.js-backed NextAuth configuration.
+ *
+ * Spreads the Edge-safe `authConfig` (pages, JWT session strategy, RBAC
+ * `authorized` callback, session claim mapping) and adds the Credentials +
+ * OAuth providers plus the database-backed `jwt` callback. This module is only
+ * ever imported from Node.js runtimes (Route Handlers, Server Components, API
+ * routes) — never from `middleware.ts`, so Prisma/bcrypt stay out of Edge.
+ */
 export const authOptions: NextAuthConfig = {
-    session: { strategy: "jwt" },
-    pages: {
-        signIn: "/signin",
-        error: "/signin",
-    },
+    ...authConfig,
     providers: [
         Credentials({
             name: "Credentials",
@@ -142,6 +149,7 @@ export const authOptions: NextAuthConfig = {
             : []),
     ],
     callbacks: {
+        ...authConfig.callbacks,
         async jwt({ token, user }) {
             // Run only on the initial sign-in (when `user` is present) so that
             // DB lookups are not repeated on every request.
@@ -155,15 +163,15 @@ export const authOptions: NextAuthConfig = {
             return token;
         },
         session({ session, token }) {
+            // Map JWT claims into the session so `role` / `id` are available in
+            // both the Edge middleware and Node.js server components.
             if (session.user) {
-                session.user.id = (token.id as string) ?? session.user.id;
-                session.user.role = (token.role as string) ?? DEFAULT_OAUTH_ROLE;
+                session.user.id = token.id ?? session.user.id ?? "";
+                session.user.role = token.role ?? DEFAULT_OAUTH_ROLE;
             }
             return session;
         },
     },
-    secret: process.env.AUTH_SECRET,
-    trustHost: true,
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authOptions);

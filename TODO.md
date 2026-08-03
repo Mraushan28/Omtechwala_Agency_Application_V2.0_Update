@@ -50,6 +50,14 @@
 - [x] 15.11 `npx tsc --noEmit` — clean
 - [x] 15.12 `npm run build` — production build succeeded (48 routes)
 
+## Vercel Edge Middleware Fix (Step 16) — Decouple NextAuth from Prisma
+
+- [x] 16.1 Create `lib/auth.config.ts` — Edge-safe `authConfig` (`providers: []`, RBAC `authorized` callback using pure JWT claims, session callback mapping `id`/`role`; zero Prisma/bcrypt imports)
+- [x] 16.2 Rewrite `middleware.ts` — `NextAuth(authConfig).auth` default export, matcher restricted to `/client`, `/contractor`, `/admin`
+- [x] 16.3 Rewrite `lib/auth.ts` — spread `authConfig`, add Credentials (bcrypt + Prisma) + Google/GitHub providers, DB-backed `jwt` callback
+- [x] 16.4 `npx tsc --noEmit` — typecheck clean (exit 0)
+- [x] 16.5 `npm run build` — production build succeeds; Edge Middleware bundle = 85.3 kB (no Prisma WASM import)
+
 ## Verification Status
 
 - [x] `npx prisma validate` — schema valid (MongoDB)
